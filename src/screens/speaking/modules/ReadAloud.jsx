@@ -5,10 +5,18 @@ import Voice from '@react-native-voice/voice';
 import * as Progress from 'react-native-progress';
 import stringSimilarity from "string-similarity"
 import axios from "axios"
+import {
+  AudioEncoderAndroidType,
+  AudioSourceAndroidType,
+  AVModeIOSOption,
+  AVEncoderAudioQualityIOSType,
+  AVEncodingOption,
+ } from 'react-native-audio-recorder-player';
+ import RNFS from 'react-native-fs';
+ import SoundPlayer from 'react-native-sound-player';
 
 const ReadAloud = () => {
   let seconds = 0;
-  const [data,setData]=useState({});
   const [sec, setSec] = useState(1);
   const [start, setStart] = useState(0);
   const [listen, setListen] = useState(false);
@@ -16,22 +24,17 @@ const ReadAloud = () => {
 
   const [result, setResult] = useState('');
   const [err, setErr] = useState('');
-  const [isRecording, setIsRecording] = useState('');
+  const [isRecording1, setIsRecording1] = useState('');
 
   const [finish, setFinish] = useState(0);
   const [score ,setScore]=useState(0);
 
-  // useEffect(()=>{
-  //     axios.get("http://10.0.2.2:3000/api/readaloud",{"title":"test"}).then((res)=>{
-  //       console.log(res.data);
-  //       setData(res.data)
-  //     }).catch((err)=>{
-  //       console.log(err);
-  //     })
-  // },[])
-
-  Voice.onSpeechStart = () => setIsRecording(1);
-  Voice.onSpeechEnd = () => setIsRecording(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioPath, setAudioPath] = useState('');
+  const [isPlaying, setIsPlaying] = useState(false);
+    
+  Voice.onSpeechStart = () => setIsRecording1(1);
+  Voice.onSpeechEnd = () => setIsRecording1(0);
   Voice.onSpeechError = err => setErr(err);
   Voice.onSpeechResults = res => setResult(res.value[0]);
 
@@ -83,14 +86,17 @@ const ReadAloud = () => {
       seconds = 0;
       setStart(1);
       setListen(1);
-      setIsRecording(1);
-      startListening();
+      setIsRecording1(1);
+      // startListening();
       progressBar();
+      startRecording();
       setTimeout(() => {
-        stopListening();
+        // stopListening();
         setFinish(1);
-        setIsRecording(0);
+        setIsRecording1(0);
         // setScore(stringSimilarity.compareTwoStrings("My name is Mayank",result))
+        stopRecording();
+        prepRecording();
       }, 4000);
 
         
@@ -109,6 +115,81 @@ const ReadAloud = () => {
       setBar(0);
      }
   }
+
+  // sound recording 
+
+  const startRecording = async () => {
+    // Let's get creative and generate a unique audio name!
+    const generateAudioName = () => {
+    // Come up with a funky way to generate a name here!
+    let a =Math.random()*10000;
+    return "record"+a;
+
+    };
+   const path = `${generateAudioName()}.aac`;
+    // Set up the audio settings for our recording adventure
+    const audioSet = {
+    AudioEncoderAndroid: AudioEncoderAndroidType.AAC,
+    AudioSourceAndroid: AudioSourceAndroidType.MIC,
+    AVModeIOS: AVModeIOSOption.measurement,
+    AVEncoderAudioQualityKeyIOS: AVEncoderAudioQualityIOSType.high,
+    AVNumberOfChannelsKeyIOS: 2,
+    AVFormatIDKeyIOS: AVEncodingOption.aac,
+    };
+    const meteringEnabled = false;
+   // Let the countdown begin…or not!
+    await setCountdown(0);
+    await setSeconds(0);
+    await setMinutes(0);
+    setStartCountdown(true);
+   try {
+    // Start the recording and get the audio URI
+    const uri = await audioRecorderPlayer?.current?.startRecorder(
+    path,
+    audioSet,
+    meteringEnabled,
+    );
+    setIsRecording1(true);
+    setAudio
+    setAudioPath(uri);
+    } catch (error) {
+    console.log('Uh-oh! Failed to start recording:', error);
+    }
+   };
+
+   const stopRecording = async () => {
+    setStartCountdown(false);
+    try {
+    // Stop the recording and see what we've got
+    const result = await audioRecorderPlayer?.current?.stopRecorder();
+    setIsRecording(false);
+    } catch (error) {
+    console.log('Oops! Failed to stop recording:', error);
+    }
+   };
+
+   const prepRecording = async () => {
+    setStartCountdown(false);
+    try {
+    const result = await audioRecorderPlayer?.current?.stopRecorder();
+    const fileContent = await RNFS.readFile(audioPath, 'base64');
+    const fileInfo = await RNFS.stat(audioPath);
+    const vnData = {
+    fileCopyUri: fileInfo?.path,
+    size: fileInfo?.size,
+    type: 'audio/mpeg',
+    name: `${generateAudioName()}.${getFileType(fileInfo?.path)}`,
+    };
+    const vnBase = `data:application/audio;base64,${fileContent}`;
+    setAudioFile(vnData);
+    setAudioBase(vnBase);
+    // Now input code here to send your voicenote to websocket endpoint.
+    setIsRecording(false);
+    } catch (error) {
+    console.log('Uh-oh! Failed to stop and send recording:', error);
+    }
+   };
+
 
   const handleSubmit=()=>{
     // mention length of paragraph and check for the length upto the half size ... rest give 0 
@@ -159,7 +240,7 @@ const ReadAloud = () => {
             <Progress.Bar progress={bar} width={200} />
           </View>:''}
 
-          <Text>{isRecording?"recrofing ":"stop"}</Text>
+          <Text>{isRecording1?"recrofing ":"stop"}</Text>
           
           <Text>{result}</Text>
           <Text>{score}</Text>
